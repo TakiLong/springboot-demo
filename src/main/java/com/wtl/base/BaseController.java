@@ -5,4 +5,5 @@ package com.wtl.base;
  * @version 1.0
  */
 public class BaseController {
+
 }

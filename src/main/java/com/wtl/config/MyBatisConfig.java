@@ -1,5 +1,7 @@
 package com.wtl.config;
 
+import com.wtl.core.plugin.VersionInterceptor;
+import org.apache.ibatis.plugin.Interceptor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import tk.mybatis.spring.mapper.MapperScannerConfigurer;
@@ -21,6 +23,14 @@ public class MyBatisConfig {
         // 两个做法都会导致扫描到tk.mybatis的Mapper，就会产生重复定义的报错.
         mapperScannerConfigurer.setBasePackage("**.wtl.**.mapper");
         return mapperScannerConfigurer;
+    }
+
+    /**
+     * 添加乐观锁
+     */
+    @Bean
+    public Interceptor versionInterceptor(){
+        return new VersionInterceptor();
     }
 
 }

@@ -32,7 +32,7 @@ public class UserController extends BaseController {
      */
     private static final Logger logger = LoggerFactory.getLogger(UserController.class);
 
-    @PostMapping("/sys/user/queryAll")
+    @RequestMapping("/sys/user/queryAll")
     public Result queryAll(){
         List<User> list = userService.selectAll();
         return Results.successWithData(list, BaseEnums.SUCCESS.code(), BaseEnums.SUCCESS.desc());
