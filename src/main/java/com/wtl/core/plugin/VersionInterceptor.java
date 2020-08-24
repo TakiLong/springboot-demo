@@ -39,7 +39,7 @@ import java.util.Properties;
 )
 public class VersionInterceptor implements Interceptor {
 
-    private static final String VERSION_COLUMN_NAME = "version";
+    private static final String VERSION_COLUMN_NAME = "version_number";
 
     private static final Logger logger = LoggerFactory.getLogger(VersionInterceptor.class);
 

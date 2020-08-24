@@ -21,7 +21,6 @@
 7. 默认情况下，实体类中如果不存在包含@Id注解的字段,所有的字段都会作为主键字段进行使用(这种效率极低)。
 8. 由于基本类型，如int作为实体类字段时会有默认值0，而且无法消除，所以实体类中建议不要使用基本类型。
 
-<font color="#00ff00">----- update time 2019-03-20 by 王天龙 -----</font>
 
 #### 关于jdbc相关配置：
 1. mysql-connector-java 6.0 的驱动：com.mysql.cj.jdbc.Driver，注意多了 cj ，若使用此驱动需要在url添加时区信息 serverTimezone=Asia/Shanghai。
@@ -72,7 +71,6 @@ log4j和Logback则是具体的日志实现方案。可以简单的理解为接�
 4. LoggerFactory 的 getLogger() 方法接收一个参数，以这个参数决定 logger 的名字，比如第二图中的日志输出。在为 logger 命名时，用类的全限定类名作为 logger name 是最好的策略，这样能够追踪到每一条日志消息的来源。
 5. 可以通过提供占位符，以参数化的方式打印日志，避免字符串拼接的不必要损耗，也无需通过logger.isDebugEnabled()这种方式判断是否需要打印。
 
-<font color="#00ff00">----- update time 2019-03-22 by 王天龙 -----</font>
 
 #### 数据库乐观锁
 ##### 1. 乐观锁
@@ -134,7 +132,23 @@ VersionInterceptor插件： 见 com.wtl.core.plugin.VersionInterceptor
 ##### 1. Druid
 Druid首先是一个数据库连接池，但它不仅仅是一个数据库连接池，它还包含一个ProxyDriver，一系列内置的JDBC组件库，一个SQLParser。Druid支持所有JDBC兼容的数据库，包括Oracle、MySql、Derby、Postgresql、SQLServer、H2等等。 Druid针对Oracle和MySql做了特别优化，比如Oracle的PSCache内存占用优化，MySql的ping检测优化。Druid在监控、可扩展性、稳定性和性能方面都有明显的优势。Druid提供了Filter-Chain模式的扩展API，可以自己编写Filter拦截JDBC中的任何方法，可以在上面做任何事情，比如说性能监控、SQL审计、用户名密码加密、日志等等。
 ##### 2. 配置
+在pom.xml中<properties>标签中添加druid版本配置
+```
+<properties>
+    <druid.version>1.0.18</druid.version>
+</properties>
+```
+且在pom.xml中引入druid包
+```
+<dependency>
+			<groupId>com.alibaba</groupId>
+			<artifactId>druid</artifactId>
+			<version>${druid.version}</version>
+		</dependency>
+```
 Druid配置到core模块下，只需在application.properties中添加如下配置即可，大部分配置是默认配置，可更改。有详细的注释，比较容易理解。
+
+
 
 之后启动项目在地址栏输入ip:port/druid/index.html并登录就可以看到Druid监控页面
 #### Redis缓存
@@ -147,8 +161,157 @@ Spring定义了org.springframework.cache.CacheManager和org.springframework.cach
 针对不同的缓存技术，需要实现不同的CacheManager，Redis缓存则提供了RedisCacheManager的实现。
 
 我将redis缓存功能放到sunny-starter-cache模块下，cache模块下可以有多种缓存技术，同时，对于其它项目来说，缓存是可插拔的，想用缓存直接引入cache模块即可。首先引入Redis的依赖：
+```
+<!--
+    springboot redis缓存支持
+-->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-redis</artifactId>
+</dependency>
+```
+SpringBoot已经默认为我们自动配置了多个CacheManager的实现，在autoconfigure.cache包下。在Spring Boot 环境下，使用缓存技术只需在项目中导入相关的依赖包即可。
+
+在 RedisCacheConfiguration 里配置了默认的 CacheManager；SpringBoot提供了默认的redis配置，RedisAutoConfiguration 是Redis的自动化配置，比如创建连接池、初始化RedisTemplate等。
+##### 2.Redis配置及声明式缓存支持
+Redis 默认配置了 RedisTemplate 和 StringRedisTemplate ，其使用的序列化规则是 JdkSerializationRedisSerializer，缓存到redis后，数据都变成了下面这种样式，非常不易于阅读。
+```
+x00\x00\x00\...
+```
+因此，重新配置RedisTemplate，使用 Jackson2JsonRedisSerializer 来序列化 Key 和 Value。同时，增加HashOperations、ValueOperations等Redis数据结构相关的操作，这样比较方便使用。
+
+同时，使用@EnableCaching开启声明式缓存支持，这样就可以使用基于注解的缓存技术。注解缓存是一个对缓存使用的抽象，通过在代码中添加下面的一些注解，达到缓存的效果。
+
+* @Cacheable：在方法执行前Spring先查看缓存中是否有数据，如果有数据，则直接返回缓存数据；没有则调用方法并将方法返回值放进缓存。
+
+* @CachePut：将方法的返回值放到缓存中。
+
+* @CacheEvict：删除缓存中的数据。
+
+demo:
+```
+@Cacheable(value = SysConstants.REDIS_KEY_MENU, key = "#menuId")
+@Override
+public Menu selectById(Long menuId) {
+    return this.get(menuId)
+}
+@CacheEvict(value = SysConstants.REDIS_KEY_MENU, key = "#menuId")
+@Override
+public Menu deleteById(Long menuId) {
+    return this.delete(menuId)
+}
+@CachePut(value = SysConstants.REDIS_KEY_MENU, key = "#menuId")
+@Override
+public Menu save(Menu dto) {
+    return this.persistSelective(dto)
+}
+```
+
+Redis服务器相关的一些配置可在application.properties中进行配置：
+
+
+##### 3.Redis工具类
+添加一个Redis的统一操作工具，主要是对redis的常用数据类型操作类做了一个归集。
+
+ValueOperations用于操作String类型，HashOperations用于操作hash数据，ListOperations操作List集合，SetOperations操作Set集合，ZSetOperations操作有序集合。
+
+关于redis的key命令和数据类型可参考:
+http://www.cnblogs.com/chiangchou/p/redis-1.html
+http://www.cnblogs.com/chiangchou/p/redis-2.html
+
+创建Redis操作工具参考文件：
+
+### Swagger支持API文档
+#### 1.Swagger
+做前后端分离，前端和后端的唯一联系，变成了API接口；API文档变成了前后端开发人员联系的纽带，变得越来越重要，swagger就是一款让你更好的书写API文档的框架。
+
+Swagger是一个简单又强大的能为你的Restful风格的Api生成文档的工具。在项目中集成这个工具，根据我们自己的配置信息能够自动为我们生成一个api文档展示页，可以在浏览器中直接访问查看项目中的接口信息，同时也可以测试每个api接口。
+#### 2.配置
+使用一个大佬整合好的swagger-spring-boot-starter，快速方便。
+
+GitHub项目地址：https://github.com/SpringForAll/spring-boot-starter-swagger。
+
+新建一个sunny-starter-swagger模块，做到可插拔。
+根据文档，一般只需要做些简单的配置即可，但如果想要显示swagger-ui.html文档展示页，还必须注入swagger资源：
+
+### 实现热部署
+在实际开发过程中，每次修改代码就得将项目重启，重新部署，对于一些大型应用来说，重启时间需要花费大量的时间成本。对于一个后端开发者来说，重启过程确实很难受啊。在 Java 开发领域，热部署一直是一个难以解决的问题，目前的 Java 虚拟机只能实现方法体的修改热部署，对于整个类的结构修改，仍然需要重启虚拟机，对类重新加载才能完成更新操作。
+#### 1.原理
+使用了两个ClassLoader，一个Classloader加载那些不会改变的类（第三方Jar包），另一个ClassLoader加载会更改的类，称为restart ClassLoader,这样在有代码更改的时候，原来的restart ClassLoader 被丢弃，重新创建一个restart ClassLoader，由于需要加载的类相比较少，所以实现了较快的重启时间。
+#### 2.方式
+springboot有三种热部署方式：
+* 使用springloaded配置pom.xml文件，使用mvn spring-boot:run启动
+* 使用springloaded本地加载启动，配置jvm参数：-javaagent:<jar包地址> -noverify
+* 使用devtools工具包，操作简单，但是每次需要重新部署
+
+建议使用devtools工具包这种方式，操作简单快捷。
+#### 3.开始配置
+在pom.xml中添加依赖
+```
+<dependencies>
+    ...
+    <!--devtools热部署-->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-devtools</artifactId>
+        <optional>true</optional>
+        <scope>true</scope>
+    </dependency>
+    ...
+</dependencies>
+...
+<build>
+    <plugins>
+        <plugin>
+            ...
+            <configuration>
+                <fork>true</fork>
+            </configuration>
+        </plugin>
+    </plugins>
+</build>
+```
+说明
+* devtools可以实现页面热部署（即页面修改后会立即生效，这个可以直接在application.properties文件中配置spring.thymeleaf.cache=false来实现），
+实现类文件热部署（类文件修改后不会立即生效），实现对属性文件的热部署。
+即devtools会监听classpath下的文件变动，并且会立即重启应用（发生在保存时机），注意：因为其采用的虚拟机机制，该项重启是很快的
+* 配置了true后在修改java文件后也就支持了热启动，不过这种方式是属于项目重启（速度比较快的项目重启），会清空session中的值，也就是如果有用户登陆的话，项目重启后需要重新登陆。
+* 默认情况下，/META-INF/maven，/META-INF/resources，/resources，/static，/templates，/public这些文件夹下的文件修改不会使应用重启，但是会重新加载（devtools内嵌了一个LiveReload server，当资源发生改变时，浏览器刷新）。
+
+#### 4.devtools的配置
+在application.properties中配置devtools
+```
+#设置开启热部署
+spring.devtools.restart.enabled=true
+#重启目录
+spring.devtools.restart.additional-paths=src/main/java
+spring.devtools.restart.exclude=WEB-INF/**
+#页面不加载缓存，修改即时生效
+spring.freemarker.cache=false
+```
+
+#### 5.IDEA中配置
+当我们修改了类文件后，idea不会自动编译，得修改idea设置。
+* File-Settings-Compiler-Build Project automatically
+* ctrl + shift + alt + / ,选择Registry,勾上 Compiler autoMake allow when app running
+
+（备注：暂时还是存在问题，按照教程配置好后）
+### SpringSecurity
+SpringSecurity 是专门针对基于Spring项目的安全框架，充分利用了AOP和Filter来实现安全功能。它提供全面的安全性解决方案，同时在 Web 请求级和方法调用级处理身份确认和授权。他提供了强大的企业安全服务，如：认证授权机制、Web资源访问控制、业务方法调用访问控制、领域对象访问控制Access Control List（ACL）、单点登录（SSO）等等。
+
+**核心功能**：认证（你是谁）、授权（你能干什么）、攻击防护（防止伪造身份）。
+
+**基本原理**：SpringSecurity的核心实质是一个过滤器链，即一组Filter，所有的请求都会经过这些过滤器，然后响应返回。每个过滤器都有特定的职责，可通过配置添加、删除过滤器。过滤器的排序很重要，因为它们之间有依赖关系。有些过滤器也不能删除，如处在过滤器链最后几环的ExceptionTranslationFilter(处理后者抛出的异常)，FilterSecurityInterceptor(最后一环，根据配置决定请求能不能访问服务)。
+
+#### 标准登录
+使用 用户名+密码 的方式来登录，用户名、密码存储在数据库，并且支持密码输入错误三次后开启验证码，通过这样一个过程来熟悉 spring security 的认证流程，掌握 spring security 的原理。
+
+1. 基础环境
+创建 sunny-cloud-security 模块，端口号设置为 8010，在sunny-cloud-security模块引入security支持以及sunny-starter-core：
 
 
 
 
+参考文档：
 https://www.cnblogs.com/chiangchou/p/sunny-1.html
+https://www.cnblogs.com/chiangchou/p/springboot-2.html

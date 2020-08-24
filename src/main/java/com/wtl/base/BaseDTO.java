@@ -7,6 +7,7 @@ import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
 
 import javax.persistence.Transient;
+import javax.persistence.Version;
 import java.io.Serializable;
 import java.util.Date;
 import java.util.HashMap;
